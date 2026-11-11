@@ -1,0 +1,4 @@
+# Architecture notes
+Modular monolith. Flow: device event (HMAC-verified, deduped by provider+eventId) -> inventory ledger -> deterministic forecast -> catalogue comparison -> pure policy engine (ALLOW/DENY/REVIEW with reason codes) -> persisted idempotent order -> re-price and re-check policy -> mock commerce + payment -> verify with provider -> audit. Stock rises only in `OrderService.confirmDelivery`.
+Safety invariants are enforced in code, not prompts: see `apps/api/src/modules/shopping/policyEngine.ts` and the order state machine in `orderService.ts`. Uncertain provider outcomes (timeouts) park the order in UNCERTAIN and are resolved by `findByReference`, never by re-submitting.
+Threat notes: the agent has a closed, Zod-validated tool registry; no URLs, shell or code execution; household/run/actor are injected server-side; audit details are redacted; mock and live providers are separated by configuration, and live is refused at startup.

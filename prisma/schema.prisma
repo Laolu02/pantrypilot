@@ -1,0 +1,65 @@
+// UNVERIFIED: written from handoff.md section 6 but never run through `prisma validate` or migrated
+// (the authoring sandbox could not download Prisma engines). The API currently runs on MemoryStore.
+// Treat as a starting point for the PrismaStore task in context.md.
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+model Household {
+  id String @id
+  name String
+  locale String
+  timezone String
+  currency String
+  size Int
+  users User[]
+  inventory InventoryItem[]
+  devices Device[]
+  orders ShoppingOrder[]
+  policy PurchasePolicy?
+  preference Preference?
+}
+model User { id String @id  householdId String  household Household @relation(fields: [householdId], references: [id])  displayName String }
+model Preference {
+  id String @id  householdId String @unique  household Household @relation(fields: [householdId], references: [id])
+  cuisines String[]  allergies String[]  dietaryRestrictions String[]  dislikedIngredients String[]  healthGoal String?  weeklyBudgetMinor Int?
+}
+model InventoryItem {
+  id String @id  householdId String  household Household @relation(fields: [householdId], references: [id])
+  canonicalKey String  name String  quantity Float  unit String  storage String  expiresAt DateTime?  opened Boolean @default(false)
+  confidence Float  source String  observedAt DateTime  status String @default("ACTIVE")
+  events InventoryEvent[]
+  @@index([householdId, canonicalKey])
+}
+model InventoryEvent {
+  id String @id  householdId String  itemId String  item InventoryItem @relation(fields: [itemId], references: [id])
+  canonicalKey String  type String  quantityDelta Float  quantityAfter Float  source String  occurredAt DateTime  correlationId String  note String?
+  @@index([householdId, occurredAt])
+}
+model ReplenishmentProfile {
+  id String @id  householdId String  canonicalKey String  dailyConsumption Float  consumptionSource String
+  leadTimeDays Float  safetyDays Float  targetDays Float  maxPlausibleQty Float
+  @@unique([householdId, canonicalKey])
+}
+model Device { id String @id  householdId String  household Household @relation(fields: [householdId], references: [id])  provider String  externalId String  name String  connected Boolean  lastSeenAt DateTime?  @@unique([provider, externalId]) }
+model DeviceEvent {
+  id String @id  householdId String  provider String  eventId String  deviceId String  payloadHash String  status String  receivedAt DateTime  correlationId String  detail String?
+  @@unique([provider, eventId]) // deduplication invariant
+}
+model PurchasePolicy {
+  householdId String @id  household Household @relation(fields: [householdId], references: [id])
+  version Int  enabled Boolean  mode String  killSwitch Boolean  allowlistedProductIds String[]  allowlistedCategories String[]
+  perItemCapMinor Int  perOrderCapMinor Int  weeklyBudgetMinor Int  currency String  cooldownHours Float  maxOrdersPerWeek Int  minConfidence Float  maxPriceAgeMinutes Float
+}
+model ShoppingOrder {
+  id String @id  householdId String  household Household @relation(fields: [householdId], references: [id])
+  provider String  status String  currency String  subtotalMinor Int  deliveryMinor Int  taxMinor Int  totalMinor Int
+  idempotencyKey String  policyDecision Json?  policySnapshot Json?  externalOrderId String?  runId String?  mock Boolean  failureReason String?
+  basket Json  history Json  createdAt DateTime  updatedAt DateTime
+  payments PaymentAttempt[]  approvals Approval[]
+  @@unique([householdId, idempotencyKey]) // idempotency invariant
+}
+model PaymentAttempt { id String @id  householdId String  orderId String  order ShoppingOrder @relation(fields: [orderId], references: [id])  provider String  status String  providerReference String?  idempotencyKey String @unique  amountMinor Int  currency String  createdAt DateTime  updatedAt DateTime }
+model Approval { id String @id  householdId String  orderId String  order ShoppingOrder @relation(fields: [orderId], references: [id])  actor String  decision String  policyVersion Int  expiresAt DateTime  createdAt DateTime }
+model AgentRun { id String @id  householdId String  correlationId String  state String  trigger Json  outcome String?  orderId String?  summary String?  startedAt DateTime  finishedAt DateTime?  error String?  toolCalls AgentToolCall[] }
+model AgentToolCall { id String @id  runId String  run AgentRun @relation(fields: [runId], references: [id])  householdId String  tool String  args Json  resultSummary String  status String  durationMs Int  at DateTime }
+model AuditEvent { id String @id  householdId String  actor String  action String  resourceType String  resourceId String  correlationId String  stage String  outcome String  reason String?  details Json  at DateTime  seq Int  @@index([householdId, at]) @@index([correlationId]) }

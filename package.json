@@ -1,0 +1,17 @@
+{
+  "name": "pantrypilot",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @pantrypilot/api --filter @pantrypilot/web dev",
+    "db:up": "docker compose up -d db",
+    "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:seed": "npx tsx prisma/seed.ts",
+    "test": "pnpm --filter @pantrypilot/api test",
+    "test:e2e": "playwright test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "demo:reset": "pnpm --filter @pantrypilot/api demo:reset"
+  }
+}
